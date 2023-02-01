@@ -1,0 +1,2 @@
+[DEV]
+DB_URI = mongodb+srv://mongoles:<password>@cluster0.nqkgsi5.mongodb.net/?retryWrites=true&w=majority
