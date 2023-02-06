@@ -43,9 +43,18 @@ class UserAuthenticator(Resource):
             return jsonify({"message": "400"})
 
 class Like(Resource):
+    def __init__(self):
+        self.collection = db.db['tweets']
     
     def put(self):
-        pass
+        data = request.get_json()
+        self.collection.update_one(
+            {"_id": ObjectId(data['id_tweet'])},
+            {
+                "$inc": {"likes": 1}
+            }
+        )
+        
 
 class Comments(Resource):
 
@@ -139,4 +148,43 @@ class Tweet(Resource):
             data['comments_count'] = 0
             return loads(dumps(data))
         except:
+            return jsonify({"message": "400"})
+
+
+class Perfil(Resource):
+
+    def __init__(self):
+        self.collection = db.db['tweets']
+    
+    def get(self):
+        try:
+            data = request.headers
+            pipeline = [
+                {
+                        "$project": {
+                        "_id": 1,
+                        "username": 1,
+                        "text": 1,
+                        "date": 1,
+                        "likes": 1,
+                        "comments": 1,
+                        "comments_count": {"$size": '$comments'}
+                    }
+                },
+                {
+                    "$match": { "username": data["name"]}
+                },
+                {
+                    "$sort": { "date": pymongo.DESCENDING }
+                },
+                {
+                    "$limit": int(data["limite"])
+                }
+                
+                
+            ]
+            query_result = self.collection.aggregate(pipeline)
+            return loads(dumps(query_result))
+        
+        except :
             return jsonify({"message": "400"})
