@@ -5,9 +5,25 @@ from json import loads
 from datetime import datetime
 from bson.objectid import ObjectId
 import pymongo
+import gridfs
+import base64
+from random import randint
 import db
 
+class Image(Resource):
 
+    def __init__(self):
+        self.database = db.db
+        
+    def get(self):
+        try:
+            fs = gridfs.GridFS(self.database)
+            file = fs.find_one({'filename': "P6.jpeg"})
+            image = file.read()
+            encoded_string = base64.b64encode(image)
+            return jsonify({"imagen": encoded_string.decode()})
+        except:
+            return jsonify({"message": "400"})
 
 class User(Resource):
 
@@ -16,15 +32,20 @@ class User(Resource):
 
     def get(self):
         return jsonify({"code": "200"})
-
+        
     def post(self):
         try:
             data = request.get_json()
-            print(data)
-            self.collection.insert_one(data)
-            return jsonify({"message": "success"})
-        except:
-            return jsonify({"message": "error"})
+            query_result = self.collection.find({"username": data["username"]})
+            results = list(query_result)
+            if len(results) == 0:
+                self.collection.insert_one(data)
+                return jsonify({"message": "200"})
+            else:
+                return jsonify({"message": "409"})
+        except Exception as e:
+            print(e)
+            return jsonify({"message": "400"})
 
 class UserAuthenticator(Resource):
 
@@ -43,23 +64,65 @@ class UserAuthenticator(Resource):
             return jsonify({"message": "400"})
 
 class Like(Resource):
+
     def __init__(self):
         self.collection = db.db['tweets']
+
+    def get(self):
+        try:
+            data = request.headers
+            query = self.collection.find_one({"_id": ObjectId(data["id_tweet"])}, {"_id": 0, "likes": 1})
+            return jsonify(query)
+        except:
+            return jsonify({"message": "400"})
     
     def put(self):
-        data = request.get_json()
-        self.collection.update_one(
-            {"_id": ObjectId(data['id_tweet'])},
-            {
-                "$inc": {"likes": 1}
-            }
-        )
-        
+        try:
+            data = request.get_json()
+            self.collection.update_one(
+                {"_id": ObjectId(data['id_tweet'])},
+                {
+                    "$inc": {"likes": 1}
+                }
+            )
+            return {"message": "200"}
+        except:
+            return {"message": "400"}
 
 class Comments(Resource):
 
     def __init__(self):
         self.collection = db.db['tweets']
+        
+    def delete(self):
+    
+    
+        try: 
+            data = request.headers
+            pipeline =[
+                { "comments": 
+                    { 
+                        "$elemMatch": { 
+                            "text": data["text"], 
+                            "user": data["user"],
+                            "date": data["date"] 
+                            } 
+                    }
+                },
+                { "$pull": { "comments": { 
+                            "text": data["text"], 
+                            "user": data["user"],
+                            "date": data["date"] 
+                    } 
+                }   
+                }
+                
+            ]
+            return jsonify({"message": "200"})
+        except: 
+            return jsonify({"message": "400"})
+
+            
     
     def get(self):
         try:
@@ -87,6 +150,16 @@ class Tweet(Resource):
 
     def __init__(self):
         self.collection = db.db['tweets']
+        self.database = db.db
+        self.fs = gridfs.GridFS(self.database)
+        
+    def delete(self):
+        try:
+            data = request.headers
+            self.collection.delete_one({"_id": ObjectId(data["id_tweet"])})
+            return jsonify({"message": "200"})
+        except: 
+            return jsonify({"message": "400"})
 
 
     def get(self):
@@ -118,8 +191,16 @@ class Tweet(Resource):
             ]
             # query_result = self.collection.find().sort("date", -1).limit(int(data["limit"]))
             query_result = self.collection.aggregate(pipeline)
+            result = []
+            for element in query_result:
+                random = randint(1, 10)
+                file = self.fs.find_one({'filename': "P"+str(random)+".jpeg"})
+                image = file.read()
+                encoded_string = base64.b64encode(image)
+                element["image"] = encoded_string.decode()
+                result.append(element)
             
-            return loads(dumps(query_result))
+            return loads(dumps(result))
         except:
             return jsonify({"message": "400"})
 
