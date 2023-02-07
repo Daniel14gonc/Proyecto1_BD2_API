@@ -1,5 +1,5 @@
 from flask_restful import Api
-from models import User, Tweet, UserAuthenticator, Comments, Like, Perfil, Hashtags
+from models import User, Tweet, UserAuthenticator, Comments, Like, Perfil, Image, Description, HomeImage, Hashtags
 from flask import Flask
 from flask_cors import CORS
   
