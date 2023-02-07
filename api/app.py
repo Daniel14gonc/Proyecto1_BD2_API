@@ -1,5 +1,5 @@
 from flask_restful import Api
-from models import User, Tweet, UserAuthenticator, Comments, Like, Perfil, Image
+from models import User, Tweet, UserAuthenticator, Comments, Like, Perfil, Image, Description, HomeImage
 from flask import Flask
 from flask_cors import CORS
   
@@ -18,6 +18,8 @@ api.add_resource(Comments, '/comments/')
 api.add_resource(Like, '/like/')
 api.add_resource(Perfil, '/perfil/')
 api.add_resource(Image, '/image/')
+api.add_resource(Description, '/description/')
+api.add_resource(HomeImage, '/homeImage/')
 
 
   

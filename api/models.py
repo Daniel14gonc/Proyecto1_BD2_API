@@ -95,29 +95,28 @@ class Comments(Resource):
         self.collection = db.db['tweets']
         
     def delete(self):
-    
-    
         try: 
             data = request.headers
-            pipeline =[
-                { "comments": 
-                    { 
-                        "$elemMatch": { 
-                            "text": data["text"], 
-                            "user": data["user"],
-                            "date": data["date"] 
-                            } 
-                    }
+            
+            print(data["id_tweet"])
+            print(data["text"])
+            print(data["user"])
+            self.collection.update_one(
+
+                { 
+                    
+                    '_id': ObjectId(data["id_tweet"])
+                    
                 },
                 { "$pull": { "comments": { 
-                            "text": data["text"], 
-                            "user": data["user"],
-                            "date": data["date"] 
-                    } 
-                }   
+                            "username_comment": data["user"],
+                            "text_comment": data["text"],
+                            "date_comment": data["date_C"]
+                            } 
+                        }   
                 }
                 
-            ]
+            ) 
             return jsonify({"message": "200"})
         except: 
             return jsonify({"message": "400"})
@@ -138,7 +137,20 @@ class Comments(Resource):
                         "_id": 0,
                         "comments": 1
                     }
+                },
+                {
+                    "$unwind": "$comments"
+                },
+                {
+                    "$sort": {"comments.date_comment": pymongo.DESCENDING}
+                },
+                {
+                    "$group": {
+                        "_id": "$_id",
+                        "comments": {"$push": "$comments"}
+                    }
                 }
+                
             ]
             query_result = self.collection.aggregate(pipeline)
             return loads(dumps(query_result))
@@ -193,11 +205,12 @@ class Tweet(Resource):
             query_result = self.collection.aggregate(pipeline)
             result = []
             for element in query_result:
+                '''
                 random = randint(1, 10)
                 file = self.fs.find_one({'filename': "P"+str(random)+".jpeg"})
                 image = file.read()
                 encoded_string = base64.b64encode(image)
-                element["image"] = encoded_string.decode()
+                element["image"] = encoded_string.decode()'''
                 result.append(element)
             
             return loads(dumps(result))
@@ -269,3 +282,28 @@ class Perfil(Resource):
         
         except :
             return jsonify({"message": "400"})
+    
+class Description(Resource):
+    def __init__(self):
+        self.collection = db.db['users']
+    
+    def get(self):
+        try:
+            data = request.headers
+            query_result = self.collection.find_one({"username":data["username"]}, {"_id":0, "desciption":1, "image":1})
+            return query_result
+        except:
+            return jsonify({"message":"400"})
+
+class HomeImage(Resource):
+    def __init__(self):
+        self.collection = db.db['users']
+    
+    def get(self):
+        try:
+            data = request.headers
+            query_result = self.collection.find_one({"username":data["username"]}, {"_id":0, "image":1})
+            return query_result
+        except:
+            return jsonify({"message":"400"})
+
