@@ -5,6 +5,7 @@ from json import loads
 from datetime import datetime
 from bson.objectid import ObjectId
 import pymongo
+import re
 import db
 
 
@@ -25,6 +26,61 @@ class User(Resource):
             return jsonify({"message": "success"})
         except:
             return jsonify({"message": "error"})
+
+class Hashtags(Resource):
+
+    def __init__(self):
+        self.collection = db.db['tweets']
+
+    def get(self):
+        hashtag = re.compile("#", re.IGNORECASE)
+        year = re.compile("2022", re.IGNORECASE)
+        pipeline = [
+            {
+                "$match": {
+                    "text": {"$regex": hashtag},
+                    "date": {"$regex": year}
+                }
+            },
+            {
+                "$project": {
+                    "_id": 1,
+                    "text": {
+                        "$substr": ["$text", {"$indexOfBytes": ["$text", "#"]}, {"$strLenCP": "$text"}]
+                    }
+                }
+            },
+            {
+            "$project": {
+                    "text": {"$split": ["$text", " "]}
+            }
+            },
+            {
+                "$unwind": "$text"
+            },
+            {
+                "$group": {
+                    "_id": "$text",
+                    "count": {"$sum": 1}
+                }
+            },
+            {
+                "$match": {
+                    "_id": {"$ne": ""}
+                }
+            },
+            {
+                "$sort": {"count": -1}
+            },
+            {
+                "$limit": 10
+            }
+        ]
+
+        query_result = self.collection.aggregate(pipeline)
+
+        return loads(dumps(query_result))
+
 
 class UserAuthenticator(Resource):
 
