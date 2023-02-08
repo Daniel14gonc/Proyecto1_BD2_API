@@ -47,6 +47,98 @@ class User(Resource):
         except Exception as e:
             print(e)
             return jsonify({"message": "400"})
+        
+class LikesAnalytics(Resource):
+
+    def __init__(self):
+        self.collection = db.db['tweets']
+    
+    def get(self):
+    #try:
+        data = request.headers
+        pipeline = [
+            {
+                "$match": {
+                    "username": data["username"],
+                    "$or": [
+                        {"date": {"$regex": str(int(data["year"]))}},
+                        {"date": {"$regex": str((int(data["year"]))-1)}},
+                        {"date": {"$regex": str((int(data["year"]))-2)}},
+                    ]
+            }
+            },
+            {
+                "$group": {
+                    "_id": "$username",
+                    "totalLikes": {"$sum": "$likes"}
+                }
+            }
+            
+        ]
+        query_result = self.collection.aggregate(pipeline)
+
+        return loads(dumps(query_result))
+    #except:
+        return jsonify({"message": "400"})
+        
+class CountriesInteraction(Resource):
+
+    def __init__(self):
+        self.collection = db.db['tweets']
+    
+    def get(self):
+        data = request.headers
+        username = data["username"]
+        pipeline = [
+            {
+                "$match": {
+                    "username": username
+                }
+            },
+            {
+                "$unwind": "$comments"
+            },
+            {
+                "$project": {
+                    "username": 1,
+                    "user_interaction": "$comments.username_comment"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "user_interaction",
+                    "foreignField": "username",
+                    "as": "info"
+                }
+            },
+            {
+                "$project": {
+                    "country": {"$first": "$info"}
+                }
+            },
+            {
+                "$project": {
+                    "country": "$country.country"
+                }
+            },
+            {
+                "$group": {
+                    "_id": "$country",
+                    "count": {"$sum": 1}
+                }
+            },
+            {
+                "$sort": {"count": -1}
+            },
+            {
+                "$limit": 5
+            }
+        ]
+
+        query_result = self.collection.aggregate(pipeline)
+
+        return loads(dumps(query_result))
 
 class Hashtags(Resource):
 
@@ -54,53 +146,57 @@ class Hashtags(Resource):
         self.collection = db.db['tweets']
 
     def get(self):
-        hashtag = re.compile("#", re.IGNORECASE)
-        year = re.compile("2022", re.IGNORECASE)
-        pipeline = [
-            {
-                "$match": {
-                    "text": {"$regex": hashtag},
-                    "date": {"$regex": year}
-                }
-            },
-            {
-                "$project": {
-                    "_id": 1,
-                    "text": {
-                        "$substr": ["$text", {"$indexOfBytes": ["$text", "#"]}, {"$strLenCP": "$text"}]
+        try:
+            hashtag = re.compile("#", re.IGNORECASE)
+            year = re.compile("2022", re.IGNORECASE)
+            pipeline = [
+                {
+                    "$match": {
+                        "text": {"$regex": hashtag},
+                        "date": {"$regex": year}
                     }
+                },
+                {
+                    "$project": {
+                        "_id": 1,
+                        "text": {
+                            "$substr": ["$text", {"$indexOfBytes": ["$text", "#"]}, {"$strLenCP": "$text"}]
+                        }
+                    }
+                },
+                {
+                "$project": {
+                        "text": {"$split": ["$text", " "]}
                 }
-            },
-            {
-            "$project": {
-                    "text": {"$split": ["$text", " "]}
-            }
-            },
-            {
-                "$unwind": "$text"
-            },
-            {
-                "$group": {
-                    "_id": "$text",
-                    "count": {"$sum": 1}
+                },
+                {
+                    "$unwind": "$text"
+                },
+                {
+                    "$group": {
+                        "_id": "$text",
+                        "count": {"$sum": 1}
+                    }
+                },
+                {
+                    "$match": {
+                        "_id": {"$ne": ""}
+                    }
+                },
+                {
+                    "$sort": {"count": -1}
+                },
+                {
+                    "$limit": 10
                 }
-            },
-            {
-                "$match": {
-                    "_id": {"$ne": ""}
-                }
-            },
-            {
-                "$sort": {"count": -1}
-            },
-            {
-                "$limit": 10
-            }
-        ]
+            ]
 
-        query_result = self.collection.aggregate(pipeline)
+            query_result = self.collection.aggregate(pipeline)
 
-        return loads(dumps(query_result))
+            return loads(dumps(query_result))
+        
+        except:
+            return jsonify({"message": "400"})
 
 
 class UserAuthenticator(Resource):
