@@ -26,6 +26,43 @@ class Image(Resource):
         except:
             return jsonify({"message": "400"})
 
+
+class TweetsPerYear(Resource):
+
+    def __init__(self):
+        self.collection = db.db['tweets']
+
+    def get(self):
+        data = request.headers
+        pipeline = [
+            {
+                "$match": {
+                    "username": data["username"]
+                }
+            },
+            {
+                "$project": {
+                "year": { "$year": { "$dateFromString": { "dateString": "$date", "format": "%Y-%m-%d %H:%M:%S" } } }
+            }
+            },
+            {
+                "$group": {
+                    "_id": "$year",
+                    "count": { "$sum": 1 }
+                }
+            },
+            {
+                "$sort": {"_id": 1}
+            },
+            {
+                "$limit": 10 
+            }
+        ]
+
+        query_result = self.collection.aggregate(pipeline)
+        return loads(dumps(query_result))
+
+
 class User(Resource):
 
     def __init__(self):
@@ -54,32 +91,40 @@ class LikesAnalytics(Resource):
         self.collection = db.db['tweets']
     
     def get(self):
-    #try:
-        data = request.headers
-        pipeline = [
-            {
-                "$match": {
-                    "username": data["username"],
-                    "$or": [
-                        {"date": {"$regex": str(int(data["year"]))}},
-                        {"date": {"$regex": str((int(data["year"]))-1)}},
-                        {"date": {"$regex": str((int(data["year"]))-2)}},
-                    ]
-            }
-            },
-            {
-                "$group": {
-                    "_id": "$username",
-                    "totalLikes": {"$sum": "$likes"}
+        try:
+            data = request.headers
+            pipeline = [
+                {
+                    "$match": {
+                        "username": data["username"]
+                    }
+                },
+                {
+                    "$project": {
+                    "likes": 1,
+                    "year": { "$year": { "$dateFromString": { "dateString": "$date", "format": "%Y-%m-%d %H:%M:%S" } } }
                 }
-            }
-            
-        ]
-        query_result = self.collection.aggregate(pipeline)
+                },
+                {
+                    "$group": {
+                        "_id": "$year",
+                        "count": { "$sum": "$likes" }
+                    }
+                },
+                {
+                    "$sort": {"_id": 1}
+                },
+                {
+                    "$limit": 10 
+                }
+            ]
 
-        return loads(dumps(query_result))
-    #except:
-        return jsonify({"message": "400"})
+            query_result = self.collection.aggregate(pipeline)
+            return loads(dumps(query_result))
+        except:
+            return jsonify({"message": "400"})
+
+
         
 class CountriesInteraction(Resource):
 
@@ -310,10 +355,29 @@ class Comments(Resource):
         except:
             return jsonify({"message": "400"})
 
+class TweetComment(Resource):
+    def __init__(self):
+        self.collection = db.db['tweets']
+
+    def post(self):
+        data = request.get_json()
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(data)
+        self.collection.update_one(
+            {"_id": ObjectId(data["id_tweet"])}, 
+            {"$push": {"comments": {"username_comment": data["user"], "text_comment": data["content"], "date_comment": now}}}
+        )
+
+        data = {"username_comment": data["user"], "text_comment": data["content"], "date_comment": now}
+
+        return jsonify(data)
+
 class Tweet(Resource):
 
     def __init__(self):
         self.collection = db.db['tweets']
+        self.users = db.db['users']
+        
         self.database = db.db
         self.fs = gridfs.GridFS(self.database)
         
@@ -370,17 +434,29 @@ class Tweet(Resource):
             return jsonify({"message": "400"})
 
     def put(self):
-        data = request.get_json()
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(data)
-        self.collection.update_one(
-            {"_id": ObjectId(data["id_tweet"])}, 
-            {"$push": {"comments": {"username_comment": data["user"], "text_comment": data["content"], "date_comment": now}}}
-        )
+        try:
+            data = request.get_json()
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(data)
+            self.collection.update_one(
+                {"_id": ObjectId(data["id_tweet"])}, 
+                {"$set": 
+                    {
+                        "username": data["username"],
+                        "text": data["text"],
+                        "likes": data["likes"]
+                    }
+                }
+            )
 
-        data = {"username_comment": data["user"], "text_comment": data["content"], "date_comment": now}
+            data = {"username": data["username"],
+                        "text": data["text"],
+                        "likes": data["likes"]}
 
-        return jsonify(data)
+            return jsonify(data)
+        
+        except:
+            return jsonify({"message": "400"})
 
     def post(self):
         try:
@@ -391,6 +467,8 @@ class Tweet(Resource):
             data['comments'] = []
 
             self.collection.insert_one(data)
+            id_T =loads(dumps(self.collection.find({"username": data["username"]}).sort("date", -1).limit(1)))[0]["_id"]["$oid"]
+            self.users.update_one({"username": data["username"]}, {"$push": {"tweets": ObjectId(id_T)}})
             data['comments_count'] = 0
             return loads(dumps(data))
         except:
@@ -458,4 +536,78 @@ class HomeImage(Resource):
             return query_result
         except:
             return jsonify({"message":"400"})
+        
+        
+        
+class AnalyticsComments(Resource):
 
+    def __init__(self):
+        self.collection = db.db['tweets']
+             
+    def get(self):
+        try:
+            data = request.headers
+            pipeline = [
+                {
+                    "$project": {
+                        "_id": 0,
+                        "username": 1,
+                        "count_comments": {"$size": "$comments"}
+                    }
+                },
+                {
+                    "$match": {"username": data["username"]}
+                },
+                {
+                    "$group": {
+                        "_id": "$username",
+                        "total_comments": {"$sum": "$count_comments"}
+                    }
+                }   
+            ]
+            query_result = self.collection.aggregate(pipeline)
+            return loads(dumps(query_result))
+        
+        except:
+            return jsonify({"message": "400"})
+
+class Fans(Resource):
+    def __init__(self):
+        self.collection = db.db['tweets']
+    
+    def get(self):
+        try:
+            data = request.headers
+            pipeline = [
+                { "$match": { "username": data["username"] } },
+                { "$unwind": "$comments" },
+                { "$group": { "_id": "$comments.username_comment", "count": { "$sum": 1 } } }, 
+                { "$sort": { "count": -1 } },
+                {"$limit": 5},
+                {
+                    "$lookup": {
+                        "from": "users",
+                        "localField": "_id",
+                        "foreignField": "username",
+                        "as": "info"
+                    }
+                },
+                {
+                    "$project": {
+                        "_id": 1,
+                        "count": "$count",
+                        "data": {"$first": "$info"}
+                    }
+                },
+                {
+                    "$project": {
+                        "_id": 1,
+                        "count": "$count",
+                        "image": "$data.image"
+                    }
+                }
+            ]
+            query_result = self.collection.aggregate(pipeline)
+            return loads(dumps(query_result))
+        except:
+            return {"message":"400"}
