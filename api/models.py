@@ -385,6 +385,20 @@ class Tweet(Resource):
         try:
             data = request.headers
             self.collection.delete_one({"_id": ObjectId(data["id_tweet"])})
+            self.users.delete_one({"_id": ObjectId(data["id_tweet"])})
+            
+            self.users.update_one(
+
+                { "username": "Aristondo01" },
+                {
+                    "$pull": {
+                    "tweets": ObjectId(data["id_tweet"])
+                    }
+                }
+                )
+                
+            
+            
             return jsonify({"message": "200"})
         except: 
             return jsonify({"message": "400"})
@@ -611,3 +625,5 @@ class Fans(Resource):
             return loads(dumps(query_result))
         except:
             return {"message":"400"}
+        
+        
