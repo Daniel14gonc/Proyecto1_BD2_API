@@ -11,6 +11,7 @@ from random import randint
 import re
 import db
 
+
 class Image(Resource):
 
     def __init__(self):

@@ -1,5 +1,5 @@
 from flask_restful import Api
-from models import User, Tweet, UserAuthenticator, Comments, Like, Perfil, Image, Description, HomeImage, Hashtags, CountriesInteraction, LikesAnalytics, AnalyticsComments, TweetsPerYear, Fans, TweetComment
+from models import User, Tweet, UserAuthenticator, Comments, Like, Perfil, Description, HomeImage, Hashtags, CountriesInteraction, LikesAnalytics, AnalyticsComments, TweetsPerYear, Fans, TweetComment
 from flask import Flask
 from flask_cors import CORS
   
@@ -24,6 +24,8 @@ api.add_resource(AnalyticsComments, '/commentsA/')
 api.add_resource(TweetsPerYear, '/tweets-per-year/')
 api.add_resource(Fans, '/fans/')
 api.add_resource(TweetComment, '/tweetComment/')
+api.add_resource(HomeImage, '/homeImage/')
+api.add_resource(Description, '/description/')
 
 
 
