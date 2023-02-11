@@ -38,7 +38,7 @@ class TweetsPerYear(Resource):
         pipeline = [
             {
                 "$match": {
-                    "username": data["username"]
+                    "userid": ObjectId(data["userId"])
                 }
             },
             {
@@ -79,11 +79,11 @@ class User(Resource):
             results = list(query_result)
             if len(results) == 0:
                 self.collection.insert_one(data)
-                return jsonify({"message": "200"})
+                return jsonify({"message": "200", "userId": str(query_result["_id"])})
+
             else:
                 return jsonify({"message": "409"})
         except Exception as e:
-            print(e)
             return jsonify({"message": "400"})
         
 class LikesAnalytics(Resource):
@@ -97,7 +97,7 @@ class LikesAnalytics(Resource):
             pipeline = [
                 {
                     "$match": {
-                        "username": data["username"]
+                        "userid": ObjectId(data["userId"])
                     }
                 },
                 {
@@ -134,11 +134,11 @@ class CountriesInteraction(Resource):
     
     def get(self):
         data = request.headers
-        username = data["username"]
+        user = data["userID"]
         pipeline = [
             {
                 "$match": {
-                    "username": username
+                    "userid": ObjectId(user)
                 }
             },
             {
@@ -146,7 +146,7 @@ class CountriesInteraction(Resource):
             },
             {
                 "$project": {
-                    "username": 1,
+                    "userid": 1,
                     "user_interaction": "$comments.username_comment"
                 }
             },
@@ -296,9 +296,6 @@ class Comments(Resource):
         try: 
             data = request.headers
             
-            print(data["id_tweet"])
-            print(data["text"])
-            print(data["user"])
             self.collection.update_one(
 
                 { 
@@ -322,39 +319,72 @@ class Comments(Resource):
             
     
     def get(self):
-        try:
-            data = request.headers
-            pipeline = [
-                {
-                    "$match": {
-                    '_id': ObjectId(data["id_tweet"])
-                    }
-                },
-                {
-                    "$project": {
-                        "_id": 0,
-                        "comments": 1
-                    }
-                },
-                {
-                    "$unwind": "$comments"
-                },
-                {
-                    "$sort": {"comments.date_comment": pymongo.DESCENDING}
-                },
-                {
-                    "$group": {
-                        "_id": "$_id",
-                        "comments": {"$push": "$comments"}
-                    }
+        #try:
+        data = request.headers
+        pipeline = [
+            {
+                "$match": {
+                '_id': ObjectId(data["id_tweet"])
                 }
-                
-            ]
-            query_result = self.collection.aggregate(pipeline)
-            return loads(dumps(query_result))
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "comments": 1
+                }
+            },
+            {
+                "$unwind": "$comments"
+            },
+            {
+                "$sort": {"comments.date_comment": pymongo.DESCENDING}
+            },
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "comments": {"$push": "$comments"}
+                }
+            },
+            {
+                "$unwind": "$comments"
+            },
+            {
+                "$project": {
+                    "user": "$comments.username_comment",
+                    "text": "$comments.text_comment",
+                    "date": "$comments.date_comment"
+                }
+            },
+            {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "user",
+                    "foreignField": "username",
+                    "as": "info"
+                }
+            },
+            {
+                "$project": {
+                    "user": 1,
+                    "text": 1,
+                    "date": 1,
+                    "info": {"$first": "$info"}
+                }
+            },
+            {
+                "$project": {
+                    "user": 1,
+                    "text": 1,
+                    "date": 1,
+                    "image": "$info.image"
+                }
+            }
+        ]
+        query_result = self.collection.aggregate(pipeline)
+        return loads(dumps(query_result))
         
-        except:
-            return jsonify({"message": "400"})
+        #except:
+            #return jsonify({"message": "400"})
 
 class TweetComment(Resource):
     def __init__(self):
@@ -363,7 +393,6 @@ class TweetComment(Resource):
     def post(self):
         data = request.get_json()
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(data)
         self.collection.update_one(
             {"_id": ObjectId(data["id_tweet"])}, 
             {"$push": {"comments": {"username_comment": data["user"], "text_comment": data["content"], "date_comment": now}}}
@@ -385,20 +414,7 @@ class Tweet(Resource):
     def delete(self):
         try:
             data = request.headers
-            self.collection.delete_one({"_id": ObjectId(data["id_tweet"])})
-            self.users.delete_one({"_id": ObjectId(data["id_tweet"])})
-            
-            self.users.update_one(
-
-                { "username": "Aristondo01" },
-                {
-                    "$pull": {
-                    "tweets": ObjectId(data["id_tweet"])
-                    }
-                }
-                )
-                
-            
+            self.collection.delete_one({"_id": ObjectId(data["id_tweet"])})    
             
             return jsonify({"message": "200"})
         except: 
@@ -408,8 +424,6 @@ class Tweet(Resource):
     def get(self):
         try:
             data = request.headers
-
-            print(data)
 
             pipeline = [
                     {
@@ -472,7 +486,6 @@ class Tweet(Resource):
     def put(self):
         try:
             data = request.get_json()
-            print(data)
             self.collection.update_one(
                 {"_id": ObjectId(data["id_tweet"])}, 
                 {"$set": 
@@ -504,6 +517,10 @@ class Tweet(Resource):
         except:
             return jsonify({"message": "400"})
 
+class ValentinesDay(Resource):
+
+    def get(self):
+        pass
 
 class Perfil(Resource):
 
@@ -580,17 +597,17 @@ class AnalyticsComments(Resource):
             pipeline = [
                 {
                     "$project": {
-                        "_id": 0,
-                        "username": 1,
+                        "_id": 1,
+                        "userid": 1,
                         "count_comments": {"$size": "$comments"}
                     }
                 },
                 {
-                    "$match": {"username": data["username"]}
+                    "$match": {"userid": ObjectId(data["userId"])}
                 },
                 {
                     "$group": {
-                        "_id": "$username",
+                        "_id": "$userid",
                         "total_comments": {"$sum": "$count_comments"}
                     }
                 }   
@@ -609,7 +626,7 @@ class Fans(Resource):
         try:
             data = request.headers
             pipeline = [
-                { "$match": { "username": data["username"] } },
+                { "$match": { "userid": ObjectId(data["userId"]) } },
                 { "$unwind": "$comments" },
                 { "$group": { "_id": "$comments.username_comment", "count": { "$sum": 1 } } }, 
                 { "$sort": { "count": -1 } },
