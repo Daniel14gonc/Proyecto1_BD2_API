@@ -253,9 +253,9 @@ class UserAuthenticator(Resource):
     def post(self):
         try:
             data = request.get_json()
-            query_result = self.collection.find_one({"username": data["username"]}, {"_id": 0, "password": 1})
+            query_result = self.collection.find_one({"username": data["username"]}, {"_id": 1, "password": 1})
             if query_result["password"] == data["password"]:
-                return jsonify({"message": "200"})
+                return jsonify({"message": "200", "userId": str(query_result["_id"])})
             else:
                 return jsonify({"message": "401"})
         except:  
@@ -412,26 +412,47 @@ class Tweet(Resource):
             print(data)
 
             pipeline = [
-                {
-                    "$project": {
+                    {
+                        "$lookup": {
+                        "from": "users",
+                        "localField": "userid",
+                        "foreignField": "_id",
+                        "as": "user"
+                            }
+                    },
+                    {
+                    "$unwind": "$user"
+                    },
+                    {
+                        "$replaceRoot": {
+                            "newRoot": {
+                            "$mergeObjects": [
+                            { "username": "$user.username","image": "$user.image" },
+                            "$$ROOT"]
+                            }
+                        }
+                    },
+                    {
+                        "$project": {
                         "_id": 1,
-                        "username": 1,
                         "text": 1,
                         "date": 1,
                         "likes": 1,
                         "comments": 1,
-                        "comments_count": {"$size": '$comments'}
-                    }
-                },
-                {
-                    "$sort": {
+                        "comments_count": {"$size": '$comments'},
+                        "username": 1,
+                        "image": 1
+                        }
+                    },
+                    {
+                        "$sort": {
                         "date": pymongo.DESCENDING
-                    }
-                },
-                {
+                        }
+                    },
+                    {
                     "$limit": int(data["limite"])
-                }
-            ]
+                    }
+                    ]             
             # query_result = self.collection.find().sort("date", -1).limit(int(data["limit"]))
             query_result = self.collection.aggregate(pipeline)
             result = []
@@ -451,22 +472,18 @@ class Tweet(Resource):
     def put(self):
         try:
             data = request.get_json()
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(data)
             self.collection.update_one(
                 {"_id": ObjectId(data["id_tweet"])}, 
                 {"$set": 
                     {
-                        "username": data["username"],
                         "text": data["text"],
                         "likes": data["likes"]
                     }
                 }
             )
 
-            data = {"username": data["username"],
-                        "text": data["text"],
-                        "likes": data["likes"]}
+            data = {"text": data["text"], "likes": data["likes"]}
 
             return jsonify(data)
         
@@ -482,8 +499,6 @@ class Tweet(Resource):
             data['comments'] = []
 
             self.collection.insert_one(data)
-            id_T =loads(dumps(self.collection.find({"username": data["username"]}).sort("date", -1).limit(1)))[0]["_id"]["$oid"]
-            self.users.update_one({"username": data["username"]}, {"$push": {"tweets": ObjectId(id_T)}})
             data['comments_count'] = 0
             return loads(dumps(data))
         except:
@@ -500,9 +515,9 @@ class Perfil(Resource):
             data = request.headers
             pipeline = [
                 {
-                        "$project": {
+                    "$project": {
                         "_id": 1,
-                        "username": 1,
+                        "userid": 1,
                         "text": 1,
                         "date": 1,
                         "likes": 1,
@@ -511,7 +526,7 @@ class Perfil(Resource):
                     }
                 },
                 {
-                    "$match": { "username": data["name"]}
+                    "$match": { "userid": ObjectId(data["userId"])}
                 },
                 {
                     "$sort": { "date": pymongo.DESCENDING }
