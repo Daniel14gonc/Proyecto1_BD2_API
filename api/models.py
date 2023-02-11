@@ -68,6 +68,7 @@ class User(Resource):
 
     def __init__(self):
         self.collection = db.db['users']
+        self.db = db.db
 
     def get(self):
         return jsonify({"code": "200"})
@@ -84,6 +85,23 @@ class User(Resource):
             else:
                 return jsonify({"message": "409"})
         except Exception as e:
+            return jsonify({"message": "400"})
+        
+    def delete(self):
+        try:
+            data = request.get_json()
+            id = data["id"]
+            user = data["user"]
+            temp_collection = self.db["tweets"]
+            requestUser = [pymongo.DeleteOne({"_id": ObjectId(id)})]
+            requestsTweets = [
+                pymongo.DeleteMany({"userId": ObjectId(id)}),
+                pymongo.UpdateMany({"_id": ObjectId(id)}, {"$pull": {"comments": {"username_comment": user}}})
+            ]
+            self.collection.bulk_write(requestUser)
+            temp_collection.bulk_write(requestsTweets)
+            return jsonify({"message": "200"})
+        except:
             return jsonify({"message": "400"})
         
 class LikesAnalytics(Resource):
@@ -521,6 +539,22 @@ class ValentinesDay(Resource):
 
     def get(self):
         pass
+
+    def put(self):
+        data = request.json()
+        user = data["id"]
+        checked = data["checked"]
+
+        if checked:
+            requests = [
+                pymongo.UpdateOne(
+                    {"_id": ObjectId(user)},
+                    {
+                        "$set": {"Valentine": checked}
+                    }
+                ),
+                pymongo
+            ]
 
 class Perfil(Resource):
 
