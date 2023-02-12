@@ -611,6 +611,22 @@ class Description(Resource):
             return query_result
         except:
             return jsonify({"message":"400"})
+        
+    def put(self):
+        try:
+            data = request.get_json()
+            print(data)
+            self.collection.update_one(
+                {"username": data["username"]}, 
+                {"$set": 
+                    {
+                        "desciption": data["new_desc"]
+                    }
+                }
+            )
+            return jsonify({"message":"200"})
+        except:
+            return jsonify({"message":"400"})
 
 class HomeImage(Resource):
     def __init__(self):
