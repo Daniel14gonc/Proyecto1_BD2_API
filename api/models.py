@@ -74,18 +74,23 @@ class User(Resource):
         return jsonify({"code": "200"})
         
     def post(self):
-        try:
-            data = request.get_json()
-            query_result = self.collection.find({"username": data["username"]})
-            results = list(query_result)
-            if len(results) == 0:
-                self.collection.insert_one(data)
-                return jsonify({"message": "200", "userId": str(query_result["_id"])})
+        #try:
+        data = request.get_json()
+        print(data)
+        query_result = self.collection.find({"username": data["username"]})
+        results = list(query_result)
+        if len(results) == 0:
+            query_result = self.collection.insert_one(data)
+            query_result = self.collection.find_one({"username": data["username"]})
+            
+            query_result = loads(dumps(query_result))
+            print(query_result)
+            return jsonify({"message": "200", "userId": str(query_result["_id"]["$oid"])})
 
-            else:
-                return jsonify({"message": "409"})
-        except Exception as e:
-            return jsonify({"message": "400"})
+        else:
+            return jsonify({"message": "409"})
+        #except Exception as e:
+            #return jsonify({"message": "400"})
         
     def delete(self):
         try:
@@ -95,8 +100,8 @@ class User(Resource):
             temp_collection = self.db["tweets"]
             requestUser = [pymongo.DeleteOne({"_id": ObjectId(id)})]
             requestsTweets = [
-                pymongo.DeleteMany({"userId": ObjectId(id)}),
-                pymongo.UpdateMany({"_id": ObjectId(id)}, {"$pull": {"comments": {"username_comment": user}}})
+                pymongo.DeleteMany({"userid": ObjectId(id)}),
+                pymongo.UpdateMany({}, {"$pull": {"comments": {"username_comment": user}}})
             ]
             self.collection.bulk_write(requestUser)
             temp_collection.bulk_write(requestsTweets)
@@ -416,7 +421,7 @@ class TweetComment(Resource):
             {"$push": {"comments": {"username_comment": data["user"], "text_comment": data["content"], "date_comment": now}}}
         )
 
-        data = {"username_comment": data["user"], "text_comment": data["content"], "date_comment": now}
+        data = {"user": data["user"], "text": data["content"], "date": now}
 
         return jsonify(data)
 
@@ -528,6 +533,7 @@ class Tweet(Resource):
             data['date'] = now
             data['likes'] = 0
             data['comments'] = []
+            data['userid'] = ObjectId(data['userid'])
 
             self.collection.insert_one(data)
             data['comments_count'] = 0
